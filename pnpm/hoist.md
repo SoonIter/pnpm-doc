@@ -127,7 +127,7 @@ react 及其依赖 loose-envify，和其间接依赖 js-tokens 都被 hoist 上�
 }
 ```
 
-于是可能造成我们的项目的 package.json 中使用但并未声明 loose-envify 和 js-tokens
+于是造成我们的项目的 package.json 中使用但并未声明 loose-envify 和 js-tokens
 
 虽然我们的项目现在能跑起来，但是如果哪一天 react 内部实现决定去掉 loose-envify 作为其依赖，或是 loose-envify 内部实现决定去掉 js-tokens，因为 loose-envify 并非作为 react 的对外接口，因此 react 可以选择在小版本上做出这个变动。如果我们的项目选择了语义化版本引入 react，那么这个变动就会导致我们的项目突然无法运行，因为 loose—envify 或 js-tokens 已经不在 node_modules 里了。如果你的项目里有成千上万的依赖，那么你将有很大的概率碰到这种问题。
 
@@ -136,83 +136,64 @@ react 及其依赖 loose-envify，和其间接依赖 js-tokens 都被 hoist 上�
 
 ## pnpm 的 node_modules 结构
 
+如上文中的 a 包，
+
 ```txt
+a
 ├── node_modules
 │   ├── .pnpm
 │   │   ├── js-tokens@4.0.0
 │   │   │   └── node_modules
 │   │   │       └── js-tokens
-│   │   │           ├── CHANGELOG.md
-│   │   │           ├── LICENSE
-│   │   │           ├── README.md
-│   │   │           ├── index.js
-│   │   │           └── package.json
 │   │   ├── loose-envify@1.4.0
 │   │   │   └── node_modules
-│   │   │       ├── js-tokens -> ../../js-tokens@4.0.0/node_modules/js-tokens
+│   │   │       ├── js-tokens    -> ../../js-tokens@4.0.0/node_modules/js-tokens
 │   │   │       └── loose-envify
-│   │   │           ├── LICENSE
-│   │   │           ├── README.md
-│   │   │           ├── cli.js
-│   │   │           ├── custom.js
-│   │   │           ├── index.js
-│   │   │           ├── loose-envify.js
-│   │   │           ├── package.json
-│   │   │           └── replace.js
+│   │   ├── react@18.2.0
+│   │   │   └── node_modules
+│   │   │       ├── loose-envify -> ../../loose-envify@1.4.0/node_modules/loose-envify
+│   │   │       └── react
 │   │   ├── node_modules
 │   │   │   ├── .bin
 │   │   │   │   └── loose-envify
 │   │   │   ├── js-tokens -> ../js-tokens@4.0.0/node_modules/js-tokens
 │   │   │   └── loose-envify -> ../loose-envify@1.4.0/node_modules/loose-envify
-│   │   ├── react@18.2.0
-│   │   │   └── node_modules
-│   │   │       ├── loose-envify -> ../../loose-envify@1.4.0/node_modules/loose-envify
-│   │   │       └── react
-│   │   │           ├── cjs
-│   │   │           │   ├── react-jsx-dev-runtime.development.js
-│   │   │           │   ├── react-jsx-dev-runtime.production.min.js
-│   │   │           │   ├── react-jsx-dev-runtime.profiling.min.js
-│   │   │           │   ├── react-jsx-runtime.development.js
-│   │   │           │   ├── react-jsx-runtime.production.min.js
-│   │   │           │   ├── react-jsx-runtime.profiling.min.js
-│   │   │           │   ├── react.development.js
-│   │   │           │   ├── react.production.min.js
-│   │   │           │   ├── react.shared-subset.development.js
-│   │   │           │   └── react.shared-subset.production.min.js
-│   │   │           ├── node_modules
-│   │   │           │   └── .bin
-│   │   │           │       └── loose-envify
-│   │   │           ├── umd
-│   │   │           │   ├── react.development.js
-│   │   │           │   ├── react.production.min.js
-│   │   │           │   └── react.profiling.min.js
-│   │   │           ├── LICENSE
-│   │   │           ├── README.md
-│   │   │           ├── index.js
-│   │   │           ├── jsx-dev-runtime.js
-│   │   │           ├── jsx-runtime.js
-│   │   │           ├── package.json
-│   │   │           └── react.shared-subset.js
 │   │   └── lock.yaml
 │   ├── react -> .pnpm/react@18.2.0/node_modules/react
 │   └── .modules.yaml
-├── packages
-│   ├── a
-│   │   ├── index.ts
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   ├── b
-│   │   └── package.json
-│   └── c
-│       └── package.json
-├── .gitignore
+├── src
+│   └── index.js
 ├── .npmrc
-├── .pnpmfile.cjs
-├── README.md
 ├── package.json
 └── pnpm-lock.yaml
 ```
 
+
+pnpm 创建该结构的大致过程如下：
+
+1. 利用 hardlink 或 copy 或 clone，
+
+```diff
+a
+├── node_modules
++ └── .pnpm
++       ├── js-tokens@4.0.0
++       │   └── node_modules
++       │       └── js-tokens
++       ├── loose-envify@1.4.0
++       │   └── node_modules
++       │       └── loose-envify
++       └── react@18.2.0
++           └── node_modules
++               └── react
+├── src
+│   └── index.js
+├── .npmrc
+├── package.json
+└── pnpm-lock.yaml
+```
+
+2. 
 
 
 
