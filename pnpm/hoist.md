@@ -136,7 +136,7 @@ react 及其依赖 loose-envify，和其间接依赖 js-tokens 都被 hoist 上�
 
 ## pnpm 的 node_modules 结构
 
-如上文中的 a 包，
+同样以上文中的 a 包为例子
 
 ```txt
 a
@@ -167,11 +167,11 @@ a
 ├── package.json
 └── pnpm-lock.yaml
 ```
+![how-pnpm-link](../imgs/pnpm-link.png)
 
+pnpm 创建该结构的大致过程如下（不考虑 peerDependencies）：
 
-pnpm 创建该结构的大致过程如下：
-
-1. 利用 hardlink 或 copy 或 clone，
+1. 利用 hardlink 或 copy 或 clone 等方式从 store 中获取该包
 
 ```diff
 a
@@ -193,11 +193,129 @@ a
 └── pnpm-lock.yaml
 ```
 
-2. 
+2. 根据 package.json 创建关联各包 dependencies 的 symlink
 
+```diff
+a
+├── node_modules
+  └── .pnpm
+        ├── js-tokens@4.0.0
+        │   └── node_modules
+        │       └── js-tokens
+        ├── loose-envify@1.4.0
+        │   └── node_modules
++       │       ├── js-tokens     -> ../../js-tokens@4.0.0/node_modules/js-tokens
+        │       └── loose-envify
+        └── react@18.2.0
+            └── node_modules
++               ├── loose-envify  -> ../../loose-envify@1.4.0/node_modules/loose-envify
+                └── react
+├── src
+│   └── index.js
+├── .npmrc
+├── package.json
+└── pnpm-lock.yaml
+```
 
+3. 创建 private-hoist 和 public-hoist
+
+- private-hoist
+
+由 `.npmrc` 中的 [hoist-pattern](https://pnpm.io/npmrc#hoist-pattern) 控制
+
+```diff
+a
+├── node_modules
+  └── .pnpm
+        ├── js-tokens@4.0.0
+        │   └── node_modules
+        │       └── js-tokens
+        ├── loose-envify@1.4.0
+        │   └── node_modules
+        │       ├── js-tokens     -> ../../js-tokens@4.0.0/node_modules/js-tokens
+        │       └── loose-envify
+        └── react@18.2.0
+        │   └── node_modules
+        │       ├── loose-envify  -> ../../loose-envify@1.4.0/node_modules/loose-envify
+        │       └── react
++       └── node_modules
++               ├── loose-envify  -> ../loose-envify@1.4.0/node_modules/loose-envify
++               └── js-tokens     -> ../js-tokens@4.0.0/node_modules/js-tokens
+├── src
+│   └── index.js
+├── .npmrc
+├── package.json
+└── pnpm-lock.yaml
+```
+
+- public-hoist
+
+由 `.npmrc` 中的 [public-hoist-pattern](https://pnpm.io/npmrc#public-hoist-pattern) 控制
+
+```diff
+a
+├── node_modules
+│ └── .pnpm
+│       ├── js-tokens@4.0.0
+│       │   └── node_modules
+│       │       └── js-tokens
+│       ├── loose-envify@1.4.0
+│       │   └── node_modules
+│       │       ├── js-tokens     -> ../../js-tokens@4.0.0/node_modules/js-tokens
+│       │       └── loose-envify
+│       ├─── react@18.2.0
+│       │   └── node_modules
+│       │       ├── loose-envify  -> ../../loose-envify@1.4.0/node_modules/loose-envify
+│       │       └── react
+│       └── node_modules
+│               ├── loose-envify  -> ../loose-envify@1.4.0/node_modules/loose-envify
+│               └── js-tokens     -> ../js-tokens@4.0.0/node_modules/js-tokens
++ ├── react -> .pnpm/react@18.2.0/node_modules/react
++ └── .modules.yaml
+├── src
+│   └── index.js
+├── .npmrc
+├── package.json
+└── pnpm-lock.yaml
+```
 
 详细可见 [pnpm 官方 blog - node_modules 结构](https://pnpm.io/blog/2020/10/17/node-modules-configuration-options-with-pnpm)
 
-## pnpm 拓扑结构的严格等级
+## 不同严格等级的 pnpm 拓扑结构的
 
+事实上 pnpm 支持四种级别的 node_modules 结构，从松到严依次为
+
+### hoisted 模式
+
+所有的三方库都平铺在根目录的 node_modules，这意味着 application code 能访问所有的依赖代码（无论是否在 dependency 里），所有的依赖也能互相访问其他依赖的代码（无论是否在 dependency)，这也是 npm 的默认模式。
+
+```
+shamefully-hoist=true
+```
+
+### semi strict 模式
+
+这也是 pnpm 的默认模式，这意味着 application code 仅能够访问其依赖里的库（types 和 eslint 相关库除外）, 但是所有的依赖仍然能够互相访问其他依赖的代码。
+
+```
+; All packages are hoisted to node_modules/.pnpm/node_modules
+hoist-pattern[]=*
+
+; All types are hoisted to the root in order to make TypeScript happy
+public-hoist-pattern[]=*types*
+
+; All ESLint-related packages are hoisted to the root as well
+public-hoist-pattern[]=*eslint*
+```
+
+### strict 模式
+
+这种情况下，我们既禁止 application code 访问依赖外的代码，也禁止三方依赖访问其他非依赖里的三方依赖代码。这个模式也是最推荐业务使用的模式，但是不幸的是，pnpm 出于对生态的兼容性，做了妥协，默认并没有设置为该模式，但是作为有追求的业务方的你，应该使用这个模式。这可以保证你的业务不会突然有一天因为依赖问题突然挂掉。
+
+```
+hoist=false
+```
+
+### pnp 模式
+
+即使 pnpm 开了最严格的 strict 模式，但是其只能控制本项目内的 node_modules 的拓扑结构，项目父目录的 node_modules 并不受到影响，所以仍然存在幻影依赖的风险，这个根因在于 node 的 resolve 算法是递归向上查找的，因此在不 hack node resolve 算法的基础上，是无法根除幻影依赖的，所以更激进的方式，就是修改 node 的 resolve 的默认行为，这样就保证了其不会递归向上查找，pnp 即采取了此种方式来根除幻影依赖问题，但是其也会带来新的问题，此处就不再多赘述。
