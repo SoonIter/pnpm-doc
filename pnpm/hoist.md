@@ -16,7 +16,7 @@
 
 我们以几个例子 (example from hardlink vs symlink) 简单验证下这几个区别
 
-### 删除源文件
+### 删除源文件后的行为
 
 我们先创建一个文件 a，以及其 hardlink 和 symlink
 
@@ -131,8 +131,7 @@ react 及其依赖 loose-envify，和其间接依赖 js-tokens 都被 hoist 上�
 
 虽然我们的项目现在能跑起来，但是如果哪一天 react 内部实现决定去掉 loose-envify 作为其依赖，或是 loose-envify 内部实现决定去掉 js-tokens，因为 loose-envify 并非作为 react 的对外接口，因此 react 可以选择在小版本上做出这个变动。如果我们的项目选择了语义化版本引入 react，那么这个变动就会导致我们的项目突然无法运行，因为 loose—envify 或 js-tokens 已经不在 node_modules 里了。如果你的项目里有成千上万的依赖，那么你将有很大的概率碰到这种问题。
 
-这种问题称作幻影依赖问题，造成了缺失依赖的 package.json。如果你遇到 `Module xxx not found`，大概率是因为你的 `package.json` 没有写全，或是你使用的第三方包 `package.json` 没有写全。
-
+这种问题称作幻影依赖问题，造成了缺失依赖的 package.json。如果你遇到 `Module xxx not found`，大概率是因为你的 `package.json` 没有写全，或是你使用的第三方包 `package.json` 没有写全。这需要你对错误的第三方包进行更新或者修复。
 
 ## pnpm 的 node_modules 结构
 
@@ -221,7 +220,7 @@ a
 
 - private-hoist
 
-由 `.npmrc` 中的 [hoist-pattern](https://pnpm.io/npmrc#hoist-pattern) 控制
+由 `.npmrc` 中的 [hoist-pattern](https://pnpm.io/npmrc#hoist-pattern) 控制，默认值为 `['*']`
 
 ```diff
 a
@@ -248,9 +247,9 @@ a
 └── pnpm-lock.yaml
 ```
 
-- public-hoist
+- public-hoist 和 `<workspace-root>/package.json` 中的包
 
-由 `.npmrc` 中的 [public-hoist-pattern](https://pnpm.io/npmrc#public-hoist-pattern) 控制
+由 `.npmrc` 中的 [public-hoist-pattern](https://pnpm.io/npmrc#public-hoist-pattern) 控制，默认值为 `['*prettier*', '*eslint*']`
 
 ```diff
 a
@@ -270,8 +269,8 @@ a
 │       └── node_modules
 │               ├── loose-envify  -> ../loose-envify@1.4.0/node_modules/loose-envify
 │               └── js-tokens     -> ../js-tokens@4.0.0/node_modules/js-tokens
-+ ├── react -> .pnpm/react@18.2.0/node_modules/react
-+ └── .modules.yaml
++├── react -> .pnpm/react@18.2.0/node_modules/react
++└── .modules.yaml
 ├── src
 │   └── index.js
 ├── .npmrc
@@ -279,15 +278,15 @@ a
 └── pnpm-lock.yaml
 ```
 
-详细可见 [pnpm 官方 blog - node_modules 结构](https://pnpm.io/blog/2020/10/17/node-modules-configuration-options-with-pnpm)
-
 ## 不同严格等级的 pnpm 拓扑结构的
 
 事实上 pnpm 支持四种级别的 node_modules 结构，从松到严依次为
 
+详细可见 [pnpm official blog - node_modules 结构](https://pnpm.io/blog/2020/10/17/node-modules-configuration-options-with-pnpm)
+
 ### hoisted 模式
 
-所有的三方库都平铺在根目录的 node_modules，这意味着 application code 能访问所有的依赖代码（无论是否在 dependency 里），所有的依赖也能互相访问其他依赖的代码（无论是否在 dependency)，这也是 npm 的默认模式。
+与扁平化的结构一样，所有的三方库都平铺在根目录的 node_modules，这意味着 application code 能访问所有的依赖代码（无论是否在 dependency 里），所有的依赖也能互相访问其他依赖的代码 (无论是否在 dependency)，这也是 npm 的默认模式。
 
 ```
 shamefully-hoist=true
@@ -297,7 +296,7 @@ shamefully-hoist=true
 
 这也是 pnpm 的默认模式，这意味着 application code 仅能够访问其依赖里的库（types 和 eslint 相关库除外）, 但是所有的依赖仍然能够互相访问其他依赖的代码。
 
-```
+```ini
 ; All packages are hoisted to node_modules/.pnpm/node_modules
 hoist-pattern[]=*
 
@@ -312,10 +311,11 @@ public-hoist-pattern[]=*eslint*
 
 这种情况下，我们既禁止 application code 访问依赖外的代码，也禁止三方依赖访问其他非依赖里的三方依赖代码。这个模式也是最推荐业务使用的模式，但是不幸的是，pnpm 出于对生态的兼容性，做了妥协，默认并没有设置为该模式，但是作为有追求的业务方的你，应该使用这个模式。这可以保证你的业务不会突然有一天因为依赖问题突然挂掉。
 
-```
+```ini
 hoist=false
 ```
 
 ### pnp 模式
 
 即使 pnpm 开了最严格的 strict 模式，但是其只能控制本项目内的 node_modules 的拓扑结构，项目父目录的 node_modules 并不受到影响，所以仍然存在幻影依赖的风险，这个根因在于 node 的 resolve 算法是递归向上查找的，因此在不 hack node resolve 算法的基础上，是无法根除幻影依赖的，所以更激进的方式，就是修改 node 的 resolve 的默认行为，这样就保证了其不会递归向上查找，pnp 即采取了此种方式来根除幻影依赖问题，但是其也会带来新的问题，此处就不再多赘述。
+

@@ -1,13 +1,18 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-dependencies:
-  react:
-    specifier: 18.2.0
-    version: 18.2.0
+importers:
+
+  .: {}
+
+  packages/a:
+    dependencies:
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
 
 packages:
 
